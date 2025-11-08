@@ -1,0 +1,32 @@
+# CRITICAL: Read Rules Files Before Any Work
+
+## MANDATORY FIRST STEP
+Before creating any plan, implementing any code, or making any changes:
+1. ALWAYS read `.cursor/rules/plan.mdc` for planning phase rules
+2. ALWAYS read `.cursor/rules/create.mdc` for implementation phase rules
+3. Verify compliance with ALL rules before proceeding
+
+## Quick Rules Reference
+
+### TypeScript Standards
+- NEVER use `any` type in TypeScript code
+- NEVER use type casts or type assertions (e.g., `as Type`, `<Type>value`)
+- Always use proper type definitions and type inference
+
+### Code Restrictions
+- NO timeouts: Do not use `setTimeout`, `setInterval`, or any timeout/delay mechanisms
+- NO logs: Do not use `console.log`, `console.error`, `console.warn`, or any logging statements
+
+### GitHub Operations
+- All GitHub CLI operations MUST use the EricEisaman account
+- Verify GitHub CLI is authenticated as EricEisaman before any git/GitHub operations
+- Use `gh auth status` to confirm the correct account is active
+
+## Enforcement
+- Flag any rule violations in the planning phase before implementation
+- Reject any code that violates these constraints
+- Find alternative solutions that comply with all rules
+
+## Full Rules
+See `.cursor/rules/plan.mdc` and `.cursor/rules/create.mdc` for complete details.
+
