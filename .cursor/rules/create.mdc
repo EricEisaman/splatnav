@@ -1,0 +1,21 @@
+# Creation/Implementation Rules
+
+## GitHub Account Requirement
+- All GitHub CLI operations MUST use the EricEisaman account
+- Verify GitHub CLI is authenticated as EricEisaman before any git/GitHub operations
+- Use `gh auth status` to confirm the correct account is active
+
+## TypeScript Standards
+- NEVER use `any` type in TypeScript code
+- NEVER use type casts or type assertions (e.g., `as Type`, `<Type>value`)
+- Always use proper type definitions and type inference
+
+## Code Restrictions
+- NO timeouts: Do not use `setTimeout`, `setInterval`, or any timeout/delay mechanisms
+- NO logs: Do not use `console.log`, `console.error`, `console.warn`, or any logging statements
+
+## Implementation Phase Guidelines
+- All code must strictly adhere to these rules
+- Reject any code that violates these constraints
+- Use proper TypeScript types and avoid workarounds that require type casting
+- Find alternative solutions that don't require timeouts or logging

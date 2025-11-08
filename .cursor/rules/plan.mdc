@@ -1,0 +1,20 @@
+# Planning Rules
+
+## GitHub Account Requirement
+- All GitHub CLI operations MUST use the EricEisaman account
+- Verify GitHub CLI is authenticated as EricEisaman before any git/GitHub operations
+- Use `gh auth status` to confirm the correct account is active
+
+## TypeScript Standards
+- NEVER use `any` type in TypeScript code
+- NEVER use type casts or type assertions (e.g., `as Type`, `<Type>value`)
+- Always use proper type definitions and type inference
+
+## Code Restrictions
+- NO timeouts: Do not use `setTimeout`, `setInterval`, or any timeout/delay mechanisms
+- NO logs: Do not use `console.log`, `console.error`, `console.warn`, or any logging statements
+
+## Planning Phase Guidelines
+- When creating plans, ensure all proposed code follows these rules
+- Flag any violations in the planning phase before implementation
+- Suggest alternatives that comply with these constraints
