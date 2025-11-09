@@ -90,12 +90,14 @@ function handleFile(file: File): void {
 
 function handleDragOver(event: DragEvent): void {
   isDragOver.value = true
-  event.dataTransfer.dropEffect = 'copy'
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
 }
 
 function handleDragLeave(event: DragEvent): void {
-  const relatedTarget = event.relatedTarget as HTMLElement | null
-  if (!dropZone.value?.contains(relatedTarget)) {
+  const relatedTarget = event.relatedTarget
+  if (relatedTarget && dropZone.value && relatedTarget instanceof Node && !dropZone.value.contains(relatedTarget)) {
     isDragOver.value = false
   }
 }
@@ -118,7 +120,10 @@ function triggerFileInput(): void {
 }
 
 function handleFileInputChange(event: Event): void {
-  const target = event.target as HTMLInputElement
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
   const files = target.files
   if (files && files.length > 0) {
     handleFile(files[0])

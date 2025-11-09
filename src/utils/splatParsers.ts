@@ -2,39 +2,10 @@ import { SplatFileFormat, type PointCloud } from '@/types'
 import { Engine, Scene, SceneLoader, GaussianSplattingMesh } from '@babylonjs/core'
 import '@babylonjs/loaders/SPLAT'
 
-/**
- * Internal structure of splatData property in GaussianSplattingMesh.
- * This is not exposed in the public type definition but is available at runtime in Babylon.js 8.36.1+.
- */
-interface GaussianSplattingMeshData {
-  splatData?: {
-    positions?: Float32Array
-    colors?: Float32Array
-    rotations?: Float32Array
-    scales?: Float32Array
-  }
+function isFloat32Array(value: unknown): value is Float32Array {
+  return value instanceof Float32Array
 }
 
-/**
- * Extended interface for accessing internal properties of GaussianSplattingMesh.
- * These properties exist at runtime but are not in the public type definition.
- */
-interface GaussianSplattingMeshInternal extends GaussianSplattingMesh {
-  _splatData?: {
-    positions?: Float32Array
-    colors?: Float32Array
-    rotations?: Float32Array
-  }
-  _splatPositions?: Float32Array
-  _positions?: Float32Array
-  _colors?: Float32Array
-  _rotations?: Float32Array
-  geometry?: {
-    getVerticesData?: (kind: string) => Float32Array | null
-    [key: string]: unknown
-  }
-  [key: string]: unknown
-}
 
 /**
  * Parses a Gaussian splat file (.spz, .ply, or .splat) and extracts point cloud data.
@@ -43,6 +14,34 @@ interface GaussianSplattingMeshInternal extends GaussianSplattingMesh {
  * @throws Error if the file is invalid, empty, or in an unsupported format
  */
 export async function parseSplatFile(file: File, targetScene?: Scene): Promise<PointCloud> {
+  function createPointCloudResult(
+    v: Float32Array,
+    c: Float32Array,
+    n: Float32Array | null,
+    cnt: number,
+    gm: GaussianSplattingMesh | undefined,
+    f: File | undefined,
+    ff: SplatFileFormat | undefined
+  ): PointCloud {
+    const vertices = new Float32Array(v.length)
+    vertices.set(v)
+    const colors = new Float32Array(c.length)
+    colors.set(c)
+    const normals = n ? (() => {
+      const arr = new Float32Array(n.length)
+      arr.set(n)
+      return arr
+    })() : null
+    return {
+      vertices,
+      colors,
+      normals,
+      count: cnt,
+      gaussianMesh: gm,
+      file: f,
+      fileFormat: ff,
+    }
+  }
   if (!file || file.size === 0) {
     throw new Error('File is empty or invalid')
   }
@@ -54,36 +53,54 @@ export async function parseSplatFile(file: File, targetScene?: Scene): Promise<P
     throw new Error('File has no extension')
   }
   
-  let result: PointCloud
+  let parsedResult: PointCloud
   
   switch (extension) {
     case 'spz':
-      result = await parseSPZ(file, targetScene)
+      parsedResult = await parseSPZ(file, targetScene)
       break
     case 'ply':
-      result = await parsePLY(file)
+      parsedResult = await parsePLY(file)
       break
     case 'splat':
-      result = await parseSplat(file)
+      parsedResult = await parseSplat(file)
       break
     default:
       throw new Error(`Unsupported file format: .${extension}. Supported formats: .spz, .ply, .splat`)
   }
   
-  if (!result.file) {
-    result.file = file
+  if (!parsedResult.file) {
+    parsedResult.file = file
   }
-  if (!result.fileFormat) {
+  if (!parsedResult.fileFormat) {
     if (extension === 'spz') {
-      result.fileFormat = SplatFileFormat.SPZ
+      parsedResult.fileFormat = SplatFileFormat.SPZ
     } else if (extension === 'ply') {
-      result.fileFormat = SplatFileFormat.PLY
+      parsedResult.fileFormat = SplatFileFormat.PLY
     } else if (extension === 'splat') {
-      result.fileFormat = SplatFileFormat.SPLAT
+      parsedResult.fileFormat = SplatFileFormat.SPLAT
     }
   }
   
-  return result
+  const verticesArray = new Float32Array(parsedResult.vertices.length)
+  verticesArray.set(parsedResult.vertices)
+  const colorsArray = new Float32Array(parsedResult.colors.length)
+  colorsArray.set(parsedResult.colors)
+  const normalsArray = parsedResult.normals ? (() => {
+    const arr = new Float32Array(parsedResult.normals.length)
+    arr.set(parsedResult.normals)
+    return arr
+  })() : null
+  const countValue = parsedResult.count
+  let gaussianMeshValue: GaussianSplattingMesh | undefined = undefined
+  const parsedGaussianMesh = parsedResult.gaussianMesh
+  if (parsedGaussianMesh && parsedGaussianMesh instanceof GaussianSplattingMesh) {
+    gaussianMeshValue = parsedGaussianMesh
+  }
+  const fileValue = parsedResult.file
+  const fileFormatValue = parsedResult.fileFormat
+  
+  return createPointCloudResult(verticesArray, colorsArray, normalsArray, countValue, gaussianMeshValue, fileValue, fileFormatValue)
 }
 
 /**
@@ -192,8 +209,8 @@ async function parseSPZ(file: File, targetScene?: Scene): Promise<PointCloud> {
     const publicProps = allProps.filter(key => !key.startsWith('_'))
     
     // Check for geometry property
-    const gsInternal = gaussianSplatting as GaussianSplattingMeshInternal
-    const geometry = gsInternal.geometry
+    const geometryDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, 'geometry')
+    const geometry = geometryDesc?.value
     const geometryProps = geometry ? Object.keys(geometry) : []
     
     // Check for common private property names
@@ -218,9 +235,13 @@ async function parseSPZ(file: File, targetScene?: Scene): Promise<PointCloud> {
     let interleavedBuffer: Float32Array | null = null
     
     // Method 1: Try splatData property (current approach)
-    const gsMesh = gaussianSplatting as GaussianSplattingMeshData
-    const splatData = gsMesh.splatData
-    if (splatData) {
+    const splatDataDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, 'splatData')
+    const splatData = splatDataDesc?.value
+    function hasSplatDataProperties(obj: unknown): obj is { positions?: Float32Array; colors?: Float32Array; rotations?: Float32Array } {
+      return typeof obj === 'object' && obj !== null && ('positions' in obj || 'colors' in obj || 'rotations' in obj)
+    }
+    
+    if (hasSplatDataProperties(splatData)) {
       if (splatData.positions && splatData.positions.length >= minPosSize) {
         positions = splatData.positions
       }
@@ -234,26 +255,33 @@ async function parseSPZ(file: File, targetScene?: Scene): Promise<PointCloud> {
     
     // Method 2: Try private properties directly (with size validation)
     if (!positions) {
-      if (gsInternal._splatData) {
-        const data = gsInternal._splatData
-        if (data.positions && data.positions.length >= minPosSize) positions = data.positions
-        if (data.colors && data.colors.length >= minColorSize) colors = data.colors
-        if (data.rotations && data.rotations.length >= minRotSize) rotations = data.rotations
+      const _splatDataDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, '_splatData')
+      const _splatDataValue = _splatDataDesc?.value
+      if (hasSplatDataProperties(_splatDataValue)) {
+        if (_splatDataValue.positions && _splatDataValue.positions.length >= minPosSize) positions = _splatDataValue.positions
+        if (_splatDataValue.colors && _splatDataValue.colors.length >= minColorSize) colors = _splatDataValue.colors
+        if (_splatDataValue.rotations && _splatDataValue.rotations.length >= minRotSize) rotations = _splatDataValue.rotations
       }
       // Explicit check for _splatPositions (found in error debug output)
-      if (gsInternal._splatPositions) {
-        if (!positions && gsInternal._splatPositions.length >= minPosSize) {
-          positions = gsInternal._splatPositions
-        }
+      const _splatPositionsDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, '_splatPositions')
+      const _splatPositionsValue = _splatPositionsDesc?.value
+      if (isFloat32Array(_splatPositionsValue) && !positions && _splatPositionsValue.length >= minPosSize) {
+        positions = _splatPositionsValue
       }
-      if (!positions && gsInternal._positions && gsInternal._positions.length >= minPosSize) {
-        positions = gsInternal._positions
+      const _positionsDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, '_positions')
+      const _positionsValue = _positionsDesc?.value
+      if (isFloat32Array(_positionsValue) && !positions && _positionsValue.length >= minPosSize) {
+        positions = _positionsValue
       }
-      if (!colors && gsInternal._colors && gsInternal._colors.length >= minColorSize) {
-        colors = gsInternal._colors
+      const _colorsDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, '_colors')
+      const _colorsValue = _colorsDesc?.value
+      if (isFloat32Array(_colorsValue) && !colors && _colorsValue.length >= minColorSize) {
+        colors = _colorsValue
       }
-      if (!rotations && gsInternal._rotations && gsInternal._rotations.length >= minRotSize) {
-        rotations = gsInternal._rotations
+      const _rotationsDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, '_rotations')
+      const _rotationsValue = _rotationsDesc?.value
+      if (isFloat32Array(_rotationsValue) && !rotations && _rotationsValue.length >= minRotSize) {
+        rotations = _rotationsValue
       }
     }
     
@@ -272,7 +300,8 @@ async function parseSPZ(file: File, targetScene?: Scene): Promise<PointCloud> {
     // Method 4: Scan all properties for Float32Arrays (with strict size validation)
     // First pass: collect all Float32Arrays for debugging
     for (const prop of allProps) {
-      const value = gsInternal[prop]
+      const propDesc = Object.getOwnPropertyDescriptor(gaussianSplatting, prop)
+      const value = propDesc?.value
       if (value instanceof Float32Array) {
         const meetsPosSize = value.length >= minPosSize
         const meetsColorSize = value.length >= minColorSize
@@ -441,15 +470,44 @@ async function parseSPZ(file: File, targetScene?: Scene): Promise<PointCloud> {
       scene.removeMesh(gaussianSplatting, false)
     }
     
-    const pointCloudResult: PointCloud = {
-      vertices,
-      colors: colorsArray,
-      normals: normalsArray,
-      count: actualCount,
-      gaussianMesh: targetScene ? gaussianSplatting : undefined,
-      file: targetScene ? file : undefined,
-      fileFormat: SplatFileFormat.SPZ,
+    const verticesResult = new Float32Array(vertices.length)
+    verticesResult.set(vertices)
+    const colorsResult = new Float32Array(colorsArray.length)
+    colorsResult.set(colorsArray)
+    const normalsResult = normalsArray ? (() => {
+      const arr = new Float32Array(normalsArray.length)
+      arr.set(normalsArray)
+      return arr
+    })() : null
+    const countResult = actualCount
+    let gaussianMeshResult: GaussianSplattingMesh | undefined = undefined
+    if (targetScene && gaussianSplatting instanceof GaussianSplattingMesh) {
+      gaussianMeshResult = gaussianSplatting
     }
+    const fileResult = targetScene ? file : undefined
+    const fileFormatResult = SplatFileFormat.SPZ
+    
+    function createSPZPointCloud(
+      v: Float32Array,
+      c: Float32Array,
+      n: Float32Array | null,
+      cnt: number,
+      gm: GaussianSplattingMesh | undefined,
+      f: File | undefined,
+      ff: SplatFileFormat
+    ): PointCloud {
+      return {
+        vertices: v,
+        colors: c,
+        normals: n,
+        count: cnt,
+        gaussianMesh: gm,
+        file: f,
+        fileFormat: ff,
+      }
+    }
+    
+    const pointCloudResult = createSPZPointCloud(verticesResult, colorsResult, normalsResult, countResult, gaussianMeshResult, fileResult, fileFormatResult)
     
     // Dispose scene and engine only if we created them (not if targetScene was provided)
     if (objectUrl) {
@@ -547,12 +605,32 @@ async function parsePLY(file: File): Promise<PointCloud> {
     vertexIndex++
   }
   
-  return {
-    vertices,
-    colors,
-    normals: hasNormal ? normals : null,
-    count: vertexCount,
+  const verticesResult = new Float32Array(vertices.length)
+  verticesResult.set(vertices)
+  const colorsResult = new Float32Array(colors.length)
+  colorsResult.set(colors)
+  const normalsResult = hasNormal ? (() => {
+    const arr = new Float32Array(normals.length)
+    arr.set(normals)
+    return arr
+  })() : null
+  const countResult = vertexCount
+  
+  function createPLYPointCloud(
+    v: Float32Array,
+    c: Float32Array,
+    n: Float32Array | null,
+    cnt: number
+  ): PointCloud {
+    return {
+      vertices: v,
+      colors: c,
+      normals: n,
+      count: cnt,
+    }
   }
+  
+  return createPLYPointCloud(verticesResult, colorsResult, normalsResult, countResult)
 }
 
 async function parseSplat(file: File): Promise<PointCloud> {
@@ -595,11 +673,31 @@ async function parseSplat(file: File): Promise<PointCloud> {
     normals[i * 3 + 2] = 1 - 2 * (qx * qx + qy * qy)
   }
   
-  return {
-    vertices,
-    colors,
-    normals,
-    count,
+  const verticesResult = new Float32Array(vertices.length)
+  verticesResult.set(vertices)
+  const colorsResult = new Float32Array(colors.length)
+  colorsResult.set(colors)
+  const normalsResult = normals.length > 0 ? (() => {
+    const arr = new Float32Array(normals.length)
+    arr.set(normals)
+    return arr
+  })() : null
+  const countResult = count
+  
+  function createPLYPointCloud(
+    v: Float32Array,
+    c: Float32Array,
+    n: Float32Array | null,
+    cnt: number
+  ): PointCloud {
+    return {
+      vertices: v,
+      colors: c,
+      normals: n,
+      count: cnt,
+    }
   }
+  
+  return createPLYPointCloud(verticesResult, colorsResult, normalsResult, countResult)
 }
 

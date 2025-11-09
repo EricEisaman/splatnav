@@ -153,7 +153,7 @@ export async function exportNavMeshAsGLB(meshData: Mesh, filename: string = 'nav
     let glbBinary: ArrayBuffer | null = null
     
     if ('files' in glbData && glbData.files && typeof glbData.files === 'object') {
-      const files = glbData.files as Record<string, string | Blob>
+      const files: Record<string, string | Blob> = glbData.files
       const fileKeys = Object.keys(files)
       
       for (const key of fileKeys) {

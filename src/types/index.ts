@@ -51,3 +51,8 @@ export interface ProcessingStatus {
   progress: number
 }
 
+export interface NavigablePointCloud {
+  positions: Float32Array
+  count: number
+}
+

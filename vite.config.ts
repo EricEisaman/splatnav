@@ -12,6 +12,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@babylonjs/core'],
     include: ['@babylonjs/serializers']
-  }
+  },
+  worker: {
+    format: 'es'
+  },
+  assetsInclude: ['**/*.wasm']
 })
 

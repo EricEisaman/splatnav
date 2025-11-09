@@ -13,6 +13,7 @@
 ## Code Restrictions
 - NO timeouts: Do not use `setTimeout`, `setInterval`, or any timeout/delay mechanisms
 - NO logs: Do not use `console.log`, `console.error`, `console.warn`, or any logging statements
+- Prefer discriminated unions to simple union types where appropriate.
 
 ## Implementation Phase Guidelines
 - All code must strictly adhere to these rules
